@@ -3,10 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { spawn, execSync, exec } from 'child_process';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-const { Jimp } = require('jimp');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,30 +39,6 @@ app.on('window-all-closed', () => {
 
 // Windows Native Utils via PowerShell
 const powershell = {
-  screenshot: (outputPath) => {
-    const script = `
-      Add-Type -AssemblyName System.Windows.Forms
-      Add-Type -AssemblyName System.Drawing
-      $V = [System.Windows.Forms.SystemInformation]::VirtualScreen
-      $Width  = $V.Width
-      $Height = $V.Height
-      $Left   = $V.Left
-      $Top    = $V.Top
-      $Bitmap = New-Object System.Drawing.Bitmap $Width, $Height
-      $Graphic = [System.Drawing.Graphics]::FromImage($Bitmap)
-      $Graphic.CopyFromScreen($Left, $Top, 0, 0, $Bitmap.Size)
-      $Bitmap.Save('${outputPath}', [System.Drawing.Imaging.ImageFormat]::Png)
-      $Graphic.Dispose()
-      $Bitmap.Dispose()
-    `;
-    try {
-      execSync(`powershell -Command "${script.replace(/\n/g, '')}"`);
-      return true;
-    } catch (e) {
-      console.error('Screenshot error:', e);
-      return false;
-    }
-  },
   click: (x, y) => {
     const script = `
       Add-Type -TypeDefinition @'
@@ -99,20 +71,12 @@ ipcMain.handle('select-folder', async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle('select-image', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openFile'],
-    filters: [{ name: 'Images', extensions: ['jpg', 'png', 'jpeg'] }],
-  });
-  return result.filePaths[0];
-});
-
 ipcMain.on('close-app', () => { app.quit(); });
 ipcMain.on('minimize-app', () => { mainWindow.minimize(); });
 
 let isRunning = false;
 
-ipcMain.handle('start-macro', async (event, { rootDir, referenceImage, waitTimeout }) => {
+ipcMain.handle('start-macro', async (event, { rootDir, clickX, clickY, waitTimeout }) => {
   if (isRunning) return { success: false, message: 'Macro zaten çalışıyor.' };
   isRunning = true;
 
@@ -122,7 +86,7 @@ ipcMain.handle('start-macro', async (event, { rootDir, referenceImage, waitTimeo
       return fs.statSync(fullPath).isDirectory() && /^\d+$/.test(f);
     });
 
-    event.sender.send('log', `${folders.length} adet hesap klasörü bulundu.`);
+    event.sender.send('log', `${folders.length} hesap bulundu.`);
 
     for (const folderName of folders) {
       if (!isRunning) break;
@@ -131,25 +95,25 @@ ipcMain.handle('start-macro', async (event, { rootDir, referenceImage, waitTimeo
       const exePath = path.join(folderPath, 'Telegram.exe');
 
       if (!fs.existsSync(exePath)) {
-        event.sender.send('log', `Hata: ${folderName} içinde Telegram.exe bulunamadı.`);
+        event.sender.send('log', `${folderName}: Exe bulunamadı.`);
         continue;
       }
 
       event.sender.send('log', `${folderName} başlatılıyor...`);
       spawn(exePath, [], { cwd: folderPath, detached: true, stdio: 'ignore' }).unref();
 
-      const found = await findAndClickButton(referenceImage, event.sender, waitTimeout);
+      // Belirtilen süre kadar bekle ve tıkla
+      await new Promise(r => setTimeout(r, waitTimeout * 1000));
 
-      if (found) {
-        event.sender.send('log', `${folderName}: Buton tıklandı. Yeniden açılma bekleniyor...`);
-        const restarted = await waitForProcessRestart('Telegram.exe', 30000);
-        if (restarted) {
-          event.sender.send('log', `${folderName}: Yeniden açıldı, 2s bekleniyor...`);
-          await new Promise(r => setTimeout(r, 2000));
-          await killProcess('Telegram.exe');
-        }
-      } else {
-        event.sender.send('log', `${folderName}: Buton bulunamadı. Kapatılıyor...`);
+      event.sender.send('log', `${folderName}: Koordinata tıklanıyor (${clickX}, ${clickY})...`);
+      powershell.click(clickX, clickY);
+
+      event.sender.send('log', `${folderName}: Yeniden açılma bekleniyor...`);
+      const restarted = await waitForProcessRestart('Telegram.exe', 30000);
+
+      if (restarted) {
+        event.sender.send('log', `${folderName}: Yeniden açıldı, 2s bekleniyor...`);
+        await new Promise(r => setTimeout(r, 2000));
         await killProcess('Telegram.exe');
       }
 
@@ -157,7 +121,7 @@ ipcMain.handle('start-macro', async (event, { rootDir, referenceImage, waitTimeo
     }
 
     isRunning = false;
-    return { success: true, message: 'İşlemler tamamlandı.' };
+    return { success: true, message: 'İşlemler bitti.' };
   } catch (error) {
     isRunning = false;
     return { success: false, message: `Hata: ${error.message}` };
@@ -166,89 +130,15 @@ ipcMain.handle('start-macro', async (event, { rootDir, referenceImage, waitTimeo
 
 ipcMain.on('stop-macro', () => { isRunning = false; });
 
-async function findAndClickButton(refImagePath, logger, waitTimeout) {
-  const startTime = Date.now();
-  const timeout = (waitTimeout || 7) * 1000;
-  let refImage = await Jimp.read(refImagePath);
-  const tempPath = path.join(app.getPath('temp'), 'tg_macro_snap.png');
-
-  while (Date.now() - startTime < timeout) {
-    if (!isRunning) return false;
-
-    if (powershell.screenshot(tempPath)) {
-      try {
-        const screenshot = await Jimp.read(tempPath);
-        const pos = findSubImage(screenshot, refImage);
-        if (pos) {
-          powershell.click(pos.x + refImage.bitmap.width / 2, pos.y + refImage.bitmap.height / 2);
-          return true;
-        }
-      } catch (e) {
-        console.error('Find image error:', e);
-      }
-    }
-    await new Promise(r => setTimeout(r, 700));
-  }
-  return false;
-}
-
-function findSubImage(base, sub) {
-  const baseW = base.bitmap.width;
-  const baseH = base.bitmap.height;
-  const subW = sub.bitmap.width;
-  const subH = sub.bitmap.height;
-  const baseData = base.bitmap.data;
-  const subData = sub.bitmap.data;
-
-  if (subW > baseW || subH > baseH) return null;
-
-  // Çok daha hassas tarama (Step: 2)
-  for (let y = 0; y <= baseH - subH; y += 2) {
-    for (let x = 0; x <= baseW - subW; x += 2) {
-      if (matchAt(x, y)) return { x, y };
-    }
-  }
-
-  function matchAt(tx, ty) {
-    // 4x4 Izgara örnekleme (Daha güvenilir)
-    const points = [];
-    for (let i = 0; i < 4; i++) {
-      for (let j = 0; j < 4; j++) {
-        points.push([
-          Math.floor((subW - 1) * i / 3),
-          Math.floor((subH - 1) * j / 3)
-        ]);
-      }
-    }
-
-    let diffCount = 0;
-    const maxDiffAllowed = 2; // 16 noktadan 2 tanesi farklı olsa bile kabul et (Gürültü toleransı)
-
-    for (const [sx, sy] of points) {
-      const bi = ((ty + sy) * baseW + (tx + sx)) * 4;
-      const si = (sy * subW + sx) * 4;
-
-      const dr = Math.abs(baseData[bi] - subData[si]);
-      const dg = Math.abs(baseData[bi + 1] - subData[si + 1]);
-      const db = Math.abs(baseData[bi + 2] - subData[si + 2]);
-
-      if (dr > 50 || dg > 50 || db > 50) {
-        diffCount++;
-        if (diffCount > maxDiffAllowed) return false;
-      }
-    }
-    return true;
-  }
-  return null;
-}
-
 async function waitForProcessRestart(exeName, timeoutMs) {
   const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
+  // Önce kapanmasını bekle (opsiyonel ama daha sağlıklı)
+  while (Date.now() - start < 10000) {
     const alive = await checkIfProcessRunning(exeName);
     if (!alive) break;
     await new Promise(r => setTimeout(r, 500));
   }
+  // Sonra tekrar açılmasını bekle
   while (Date.now() - start < timeoutMs) {
     const alive = await checkIfProcessRunning(exeName);
     if (alive) return true;

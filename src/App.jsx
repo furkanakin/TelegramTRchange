@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 
 function App() {
   const [rootDir, setRootDir] = useState('');
-  const [refImage, setRefImage] = useState('');
+  const [clickX, setClickX] = useState(0);
+  const [clickY, setClickY] = useState(0);
   const [waitTimeout, setWaitTimeout] = useState(7);
   const [logs, setLogs] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -23,14 +24,9 @@ function App() {
     if (path) setRootDir(path);
   };
 
-  const handleSelectImage = async () => {
-    const path = await window.electron.selectImage();
-    if (path) setRefImage(path);
-  };
-
   const startMacro = async () => {
-    if (!rootDir || !refImage) {
-      setLogs(prev => [...prev, { msg: 'Hata: Lütfen klasör ve görsel seçin.', type: 'error', id: Date.now() }]);
+    if (!rootDir) {
+      setLogs(prev => [...prev, { msg: 'Hata: Lütfen ana klasörü seçin.', type: 'error', id: Date.now() }]);
       return;
     }
     setIsRunning(true);
@@ -38,8 +34,9 @@ function App() {
 
     const result = await window.electron.startMacro({
       rootDir,
-      referenceImage: refImage,
-      waitTimeout: parseInt(waitTimeout) || 7
+      clickX: parseInt(clickX),
+      clickY: parseInt(clickY),
+      waitTimeout: parseInt(waitTimeout) || 5
     });
 
     setIsRunning(false);
@@ -59,7 +56,7 @@ function App() {
   return (
     <div className="app-container">
       <div className="title-bar">
-        <div className="title">TELEGRAM TR CHANGE v1.0</div>
+        <div className="title">TELEGRAM TR CHANGE v1.2</div>
         <div className="window-controls">
           <div className="control-btn minimize" onClick={() => window.electron.minimizeApp()}></div>
           <div className="control-btn close" onClick={() => window.electron.closeApp()}></div>
@@ -75,18 +72,22 @@ function App() {
           </div>
 
           <div className="card">
-            <h3>Referans Görsel</h3>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <button className="btn secondary" onClick={handleSelectImage} style={{ flex: 1 }}>Görsel Yükle</button>
-              <div className="image-preview" style={{ width: '80px', height: '40px', margin: 0 }}>
-                {refImage ? <img src={`file://${refImage}`} alt="p" /> : <span style={{ fontSize: '10px' }}>Yok</span>}
+            <h3>Tıklama Koordinatı</h3>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: '10px', opacity: 0.6 }}>X:</span>
+                <input type="number" className="btn secondary" style={{ textAlign: 'center', cursor: 'text', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }} value={clickX} onChange={(e) => setClickX(e.target.value)} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: '10px', opacity: 0.6 }}>Y:</span>
+                <input type="number" className="btn secondary" style={{ textAlign: 'center', cursor: 'text', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }} value={clickY} onChange={(e) => setClickY(e.target.value)} />
               </div>
             </div>
-            <div className="path-display">{refImage || 'Seçilmedi'}</div>
+            <div className="path-display">Butonun ekran üzerindeki yeri.</div>
           </div>
 
           <div className="card">
-            <h3>Bekleme Süresi (sn)</h3>
+            <h3>Açılış Bekleme (sn)</h3>
             <input
               type="number"
               className="btn secondary"
@@ -95,7 +96,7 @@ function App() {
               onChange={(e) => setWaitTimeout(e.target.value)}
               min="1"
             />
-            <div className="path-display">Görsel aranacak maksimum süre.</div>
+            <div className="path-display">Açıldıktan kaç sn sonra tıklanacak?</div>
           </div>
 
           {!isRunning ? (
