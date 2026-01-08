@@ -2,10 +2,10 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import { spawn, exec } from 'child_process';
+import { spawn, execSync, exec } from 'child_process';
 import { createRequire } from 'module';
+
 const require = createRequire(import.meta.url);
-const robot = require('robotjs');
 const Jimp = require('jimp');
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,9 +27,7 @@ function createWindow() {
     backgroundColor: '#00000000',
   });
 
-  // development mode check
   const isDev = !app.isPackaged;
-
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
   } else {
@@ -42,6 +40,56 @@ app.whenReady().then(createWindow);
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+// Windows Native Utils via PowerShell
+const powershell = {
+  screenshot: (outputPath) => {
+    const script = `
+      Add-Type -AssemblyName System.Windows.Forms
+      Add-Type -AssemblyName System.Drawing
+      $Screen = [System.Windows.Forms.Screen]::PrimaryScreen
+      $Width  = $Screen.Bounds.Width
+      $Height = $Screen.Bounds.Height
+      $Left   = $Screen.Bounds.Left
+      $Top    = $Screen.Bounds.Top
+      $Bitmap = New-Object System.Drawing.Bitmap $Width, $Height
+      $Graphic = [System.Drawing.Graphics]::FromImage($Bitmap)
+      $Graphic.CopyFromScreen($Left, $Top, 0, 0, $Bitmap.Size)
+      $Bitmap.Save('${outputPath}', [System.Drawing.Imaging.ImageFormat]::Png)
+      $Graphic.Dispose()
+      $Bitmap.Dispose()
+    `;
+    try {
+      execSync(`powershell -Command "${script.replace(/\n/g, '')}"`);
+      return true;
+    } catch (e) {
+      console.error('Screenshot error:', e);
+      return false;
+    }
+  },
+  click: (x, y) => {
+    const script = `
+      Add-Type -TypeDefinition @'
+      using System;
+      using System.Runtime.InteropServices;
+      public class Mouse {
+          [DllImport("user32.dll")]
+          public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
+          [DllImport("user32.dll")]
+          public static extern bool SetCursorPos(int x, int y);
+      }
+'@
+      [Mouse]::SetCursorPos(${Math.floor(x)}, ${Math.floor(y)})
+      [Mouse]::mouse_event(0x0002, 0, 0, 0, 0)
+      [Mouse]::mouse_event(0x0004, 0, 0, 0, 0)
+    `;
+    try {
+      execSync(`powershell -Command "${script}"`);
+    } catch (e) {
+      console.error('Click error:', e);
+    }
+  }
+};
 
 // IPC Handlers
 ipcMain.handle('select-folder', async () => {
@@ -59,15 +107,9 @@ ipcMain.handle('select-image', async () => {
   return result.filePaths[0];
 });
 
-ipcMain.on('close-app', () => {
-  app.quit();
-});
+ipcMain.on('close-app', () => { app.quit(); });
+ipcMain.on('minimize-app', () => { mainWindow.minimize(); });
 
-ipcMain.on('minimize-app', () => {
-  mainWindow.minimize();
-});
-
-// Macro Logic
 let isRunning = false;
 
 ipcMain.handle('start-macro', async (event, { rootDir, referenceImage }) => {
@@ -94,27 +136,20 @@ ipcMain.handle('start-macro', async (event, { rootDir, referenceImage }) => {
       }
 
       event.sender.send('log', `${folderName} başlatılıyor...`);
+      spawn(exePath, [], { cwd: folderPath, detached: true, stdio: 'ignore' }).unref();
 
-      const child = spawn(exePath, [], { cwd: folderPath, detached: true, stdio: 'ignore' });
-      child.unref();
-
-      // Wait for window and find button
       const found = await findAndClickButton(referenceImage, event.sender);
 
       if (found) {
-        event.sender.send('log', `${folderName}: Buton bulundu ve tıklandı. Yeniden açılma bekleniyor...`);
-        // Wait for Telegram to close and reopen
+        event.sender.send('log', `${folderName}: Buton tıklandı. Yeniden açılma bekleniyor...`);
         const restarted = await waitForProcessRestart('Telegram.exe', 30000);
         if (restarted) {
-          event.sender.send('log', `${folderName}: Yeniden açıldı, 2 saniye bekleniyor...`);
+          event.sender.send('log', `${folderName}: Yeniden açıldı, 2s bekleniyor...`);
           await new Promise(r => setTimeout(r, 2000));
           await killProcess('Telegram.exe');
-          event.sender.send('log', `${folderName}: İşlem tamamlandı.`);
-        } else {
-          event.sender.send('log', `${folderName}: Yeniden açılma zaman aşımına uğradı.`);
         }
       } else {
-        event.sender.send('log', `${folderName}: 7 saniye içinde buton bulunamadı. Kapatılıyor...`);
+        event.sender.send('log', `${folderName}: Buton bulunamadı. Kapatılıyor...`);
         await killProcess('Telegram.exe');
       }
 
@@ -122,61 +157,37 @@ ipcMain.handle('start-macro', async (event, { rootDir, referenceImage }) => {
     }
 
     isRunning = false;
-    return { success: true, message: 'Tüm işlemler tamamlandı.' };
+    return { success: true, message: 'İşlemler tamamlandı.' };
   } catch (error) {
     isRunning = false;
     return { success: false, message: `Hata: ${error.message}` };
   }
 });
 
-ipcMain.on('stop-macro', () => {
-  isRunning = false;
-});
+ipcMain.on('stop-macro', () => { isRunning = false; });
 
 async function findAndClickButton(refImagePath, logger) {
   const startTime = Date.now();
   const timeout = 7000;
-  let refImage;
-
-  try {
-    refImage = await Jimp.read(refImagePath);
-  } catch (e) {
-    console.error("Referans görsel okunamadı", e);
-    return false;
-  }
+  let refImage = await Jimp.read(refImagePath);
+  const tempPath = path.join(app.getPath('temp'), 'tg_macro_snap.png');
 
   while (Date.now() - startTime < timeout) {
     if (!isRunning) return false;
 
-    try {
-      const screen = robot.screen.capture();
-      // Optimized conversion: only create Jimp once or use a smaller buffer
-      // However, robotjs images are not standard buffers for Jimp.
-      // We will use robotjs.getPixelColor as a fallback if this is too slow.
-
-      const screenshot = new Jimp(screen.width, screen.height);
-      screenshot.bitmap.data = Buffer.from(screen.image);
-
-      // RobotJS returns BGRA on most platforms, Jimp expects RGBA.
-      // Swap B and R
-      for (let i = 0; i < screenshot.bitmap.data.length; i += 4) {
-        let b = screenshot.bitmap.data[i];
-        let r = screenshot.bitmap.data[i + 2];
-        screenshot.bitmap.data[i] = r;
-        screenshot.bitmap.data[i + 2] = b;
+    if (powershell.screenshot(tempPath)) {
+      try {
+        const screenshot = await Jimp.read(tempPath);
+        const pos = findSubImage(screenshot, refImage);
+        if (pos) {
+          powershell.click(pos.x + refImage.bitmap.width / 2, pos.y + refImage.bitmap.height / 2);
+          return true;
+        }
+      } catch (e) {
+        console.error('Find image error:', e);
       }
-
-      const pos = findSubImage(screenshot, refImage);
-      if (pos) {
-        robot.moveMouse(pos.x + refImage.bitmap.width / 2, pos.y + refImage.bitmap.height / 2);
-        robot.mouseClick();
-        return true;
-      }
-    } catch (e) {
-      console.error("Ekran yakalama hatası", e);
     }
-
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 700));
   }
   return false;
 }
@@ -189,44 +200,32 @@ function findSubImage(base, sub) {
   const baseData = base.bitmap.data;
   const subData = sub.bitmap.data;
 
-  for (let y = 0; y <= baseH - subH; y += 10) {
-    for (let x = 0; x <= baseW - subW; x += 10) {
-      if (matchAt(x, y)) {
-        return { x, y };
-      }
+  for (let y = 0; y <= baseH - subH; y += 15) {
+    for (let x = 0; x <= baseW - subW; x += 15) {
+      if (matchAt(x, y)) return { x, y };
     }
   }
 
   function matchAt(tx, ty) {
-    const samples = [
-      [0, 0], [subW - 1, 0], [0, subH - 1], [subW - 1, subH - 1],
-      [Math.floor(subW / 2), Math.floor(subH / 2)]
-    ];
+    // Corner + center samples
+    const samples = [[0, 0], [subW - 1, 0], [0, subH - 1], [subW - 1, subH - 1], [Math.floor(subW / 2), Math.floor(subH / 2)]];
     for (const [sx, sy] of samples) {
       const bi = ((ty + sy) * baseW + (tx + sx)) * 4;
       const si = (sy * subW + sx) * 4;
-      if (Math.abs(baseData[bi] - subData[si]) > 40 ||
-        Math.abs(baseData[bi + 1] - subData[si + 1]) > 40 ||
-        Math.abs(baseData[bi + 2] - subData[si + 2]) > 40) {
-        return false;
-      }
+      if (Math.abs(baseData[bi] - subData[si]) > 40 || Math.abs(baseData[bi + 1] - subData[si + 1]) > 40 || Math.abs(baseData[bi + 2] - subData[si + 2]) > 40) return false;
     }
     return true;
   }
-
   return null;
 }
 
 async function waitForProcessRestart(exeName, timeoutMs) {
   const start = Date.now();
-  // Wait for process to disappear first
   while (Date.now() - start < timeoutMs) {
     const alive = await checkIfProcessRunning(exeName);
     if (!alive) break;
     await new Promise(r => setTimeout(r, 500));
   }
-
-  // Wait for it to reappear
   while (Date.now() - start < timeoutMs) {
     const alive = await checkIfProcessRunning(exeName);
     if (alive) return true;
@@ -237,8 +236,7 @@ async function waitForProcessRestart(exeName, timeoutMs) {
 
 function checkIfProcessRunning(exeName) {
   return new Promise(resolve => {
-    const cmd = `tasklist /FI "IMAGENAME eq ${exeName}"`;
-    exec(cmd, (err, stdout) => {
+    exec(`tasklist /FI "IMAGENAME eq ${exeName}"`, (err, stdout) => {
       resolve(stdout.toLowerCase().includes(exeName.toLowerCase()));
     });
   });
@@ -246,7 +244,6 @@ function checkIfProcessRunning(exeName) {
 
 function killProcess(exeName) {
   return new Promise(resolve => {
-    const cmd = `taskkill /F /IM ${exeName}`;
-    exec(cmd, () => resolve());
+    exec(`taskkill /F /IM ${exeName}`, () => resolve());
   });
 }
