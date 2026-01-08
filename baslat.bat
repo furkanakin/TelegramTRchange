@@ -1,40 +1,38 @@
 @echo off
 setlocal
-chcp 65001 > nul
 echo ==========================================
-echo    TELEGRAM TR CHANGE - BASLATICI
+echo    TELEGRAM TR CHANGE - STARTER
 echo ==========================================
 echo.
 
-:: Klasörün içine gir (VDS'de bazen root dizinde kalabiliyor)
+:: Go to current directory
 cd /d "%~dp0"
 
-:: Yerel bin klasörünü PATH'e ekle
+:: Add local node_modules bin to PATH
 set PATH=%PATH%;%~dp0node_modules\.bin
 
-echo [1/2] Bağımlılıklar yükleniyor...
-echo Bu işlem internet hızınıza bağlı olarak zaman alabilir.
-echo Lütfen ekranın ilerlemesini bekleyin...
+echo [1/2] Installing dependencies...
+echo Please wait, this may take a few minutes...
 echo.
 
-:: Hareketsiz kalmaması için verbose modda çalıştırıyoruz
+:: Use npm install with verbose log
 call npm install --loglevel info
 
 if %errorlevel% neq 0 (
     echo.
-    echo [HATA] Kütüphaneler yüklenirken bir sorun oluştu!
-    echo İnternet bağlantınızı veya Node.js kurulumunuzu kontrol edin.
+    echo [ERROR] Failed to install dependencies!
+    echo Please check your internet connection or Node.js installation.
     pause
     exit /b %errorlevel%
 )
 
 echo.
-echo [2/2] Uygulama çalıştırılıyor...
+echo [2/2] Starting application...
 call npm run dev
 
 if %errorlevel% neq 0 (
     echo.
-    echo [HATA] Uygulama başlatılamadı.
+    echo [ERROR] Application failed to start.
     pause
 )
 pause
