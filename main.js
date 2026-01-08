@@ -3,8 +3,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { spawn, exec } from 'child_process';
-import robot from 'robotjs';
-import Jimp from 'jimp';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const robot = require('robotjs');
+const Jimp = require('jimp');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
