@@ -71,6 +71,31 @@ ipcMain.handle('select-folder', async () => {
   return result.filePaths[0];
 });
 
+ipcMain.handle('get-coordinates', async () => {
+  // Görünür pencereyi küçült ki kullanıcı arkadaki butona tıklayabilsin
+  mainWindow.minimize();
+
+  const script = `
+    Add-Type -AssemblyName System.Windows.Forms
+    while (!([System.Windows.Forms.Control]::MouseButtons -band [System.Windows.Forms.MouseButtons]::Left)) { 
+      Start-Sleep -m 50 
+    }
+    $pos = [System.Windows.Forms.Control]::MousePosition
+    Write-Output "$($pos.X),$($pos.Y)"
+  `;
+
+  try {
+    const output = execSync(`powershell -Command "${script}"`).toString().trim();
+    mainWindow.restore(); // Geri getir
+    const [x, y] = output.split(',').map(Number);
+    return { x, y };
+  } catch (e) {
+    mainWindow.restore();
+    console.error('Coord capture error:', e);
+    return null;
+  }
+});
+
 ipcMain.on('close-app', () => { app.quit(); });
 ipcMain.on('minimize-app', () => { mainWindow.minimize(); });
 

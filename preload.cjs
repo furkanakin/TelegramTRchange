@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('electron', {
     stopMacro: () => ipcRenderer.send('stop-macro'),
     onLog: (callback) => ipcRenderer.on('log', (event, msg) => callback(msg)),
     closeApp: () => ipcRenderer.send('close-app'),
-    minimizeApp: () => ipcRenderer.send('minimize-app')
+    minimizeApp: () => ipcRenderer.send('minimize-app'),
+    getCoordinates: () => ipcRenderer.invoke('get-coordinates')
 });

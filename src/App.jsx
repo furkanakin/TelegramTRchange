@@ -24,6 +24,16 @@ function App() {
     if (path) setRootDir(path);
   };
 
+  const handlePickCoordinates = async () => {
+    setLogs(prev => [...prev, { msg: 'Koordinat seçme modu aktif. Lütfen tıklamak istediğiniz yere (Telegram butonu) bir kez tıklayın...', type: 'success', id: Date.now() }]);
+    const coords = await window.electron.getCoordinates();
+    if (coords) {
+      setClickX(coords.x);
+      setClickY(coords.y);
+      setLogs(prev => [...prev, { msg: `Koordinat kaydedildi: X:${coords.x}, Y:${coords.y}`, type: 'success', id: Date.now() }]);
+    }
+  };
+
   const startMacro = async () => {
     if (!rootDir) {
       setLogs(prev => [...prev, { msg: 'Hata: Lütfen ana klasörü seçin.', type: 'error', id: Date.now() }]);
@@ -73,6 +83,9 @@ function App() {
 
           <div className="card">
             <h3>Tıklama Koordinatı</h3>
+            <button className="btn secondary" onClick={handlePickCoordinates} style={{ marginBottom: '10px', background: 'rgba(56, 189, 248, 0.2)', border: '1px solid #38bdf8' }}>
+              KOORDİNAT SEÇ
+            </button>
             <div style={{ display: 'flex', gap: '10px' }}>
               <div style={{ flex: 1 }}>
                 <span style={{ fontSize: '10px', opacity: 0.6 }}>X:</span>
