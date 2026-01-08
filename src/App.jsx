@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 function App() {
   const [rootDir, setRootDir] = useState('');
   const [refImage, setRefImage] = useState('');
+  const [waitTimeout, setWaitTimeout] = useState(7);
   const [logs, setLogs] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
   const logEndRef = useRef(null);
@@ -35,7 +36,11 @@ function App() {
     setIsRunning(true);
     setLogs(prev => [...prev, { msg: 'Makro başlatılıyor...', type: 'success', id: Date.now() }]);
 
-    const result = await window.electron.startMacro({ rootDir, referenceImage: refImage });
+    const result = await window.electron.startMacro({
+      rootDir,
+      referenceImage: refImage,
+      waitTimeout: parseInt(waitTimeout) || 7
+    });
 
     setIsRunning(false);
     if (result.success) {
@@ -76,6 +81,19 @@ function App() {
               {refImage ? <img src={`file://${refImage}`} alt="preview" /> : <span>Görsel Yok</span>}
             </div>
             <div className="path-display">{refImage || 'Seçilmedi'}</div>
+          </div>
+
+          <div className="card">
+            <h3>Bekleme Süresi (sn)</h3>
+            <input
+              type="number"
+              className="btn secondary"
+              style={{ textAlign: 'center', cursor: 'text', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+              value={waitTimeout}
+              onChange={(e) => setWaitTimeout(e.target.value)}
+              min="1"
+            />
+            <div className="path-display">Görsel aranacak maksimum süre.</div>
           </div>
 
           {!isRunning ? (

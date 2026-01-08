@@ -112,7 +112,7 @@ ipcMain.on('minimize-app', () => { mainWindow.minimize(); });
 
 let isRunning = false;
 
-ipcMain.handle('start-macro', async (event, { rootDir, referenceImage }) => {
+ipcMain.handle('start-macro', async (event, { rootDir, referenceImage, waitTimeout }) => {
   if (isRunning) return { success: false, message: 'Macro zaten çalışıyor.' };
   isRunning = true;
 
@@ -138,7 +138,7 @@ ipcMain.handle('start-macro', async (event, { rootDir, referenceImage }) => {
       event.sender.send('log', `${folderName} başlatılıyor...`);
       spawn(exePath, [], { cwd: folderPath, detached: true, stdio: 'ignore' }).unref();
 
-      const found = await findAndClickButton(referenceImage, event.sender);
+      const found = await findAndClickButton(referenceImage, event.sender, waitTimeout);
 
       if (found) {
         event.sender.send('log', `${folderName}: Buton tıklandı. Yeniden açılma bekleniyor...`);
@@ -166,9 +166,9 @@ ipcMain.handle('start-macro', async (event, { rootDir, referenceImage }) => {
 
 ipcMain.on('stop-macro', () => { isRunning = false; });
 
-async function findAndClickButton(refImagePath, logger) {
+async function findAndClickButton(refImagePath, logger, waitTimeout) {
   const startTime = Date.now();
-  const timeout = 7000;
+  const timeout = (waitTimeout || 7) * 1000;
   let refImage = await Jimp.read(refImagePath);
   const tempPath = path.join(app.getPath('temp'), 'tg_macro_snap.png');
 
