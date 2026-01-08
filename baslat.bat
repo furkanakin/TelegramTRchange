@@ -1,16 +1,26 @@
 @echo off
-echo Uygulama baslatiliyor...
+setlocal
+echo ==========================================
+echo    TELEGRAM TR CHANGE - BASLATICI
+echo ==========================================
+echo.
 
-if not exist node_modules (
-    echo Bağımlılıklar eksik, yükleniyor (npm install)...
-    call npm install
-)
+:: Yerel bin klasörünü PATH'e ekle (npm'in modülleri bulması için)
+set PATH=%PATH%;%~dp0node_modules\.bin
 
-echo Moduller kontrol ediliyor...
+echo [1/2] Bağımlılıklar kontrol ediliyor ve yükleniyor...
+echo Bu işlem ilk seferde birkaç dakika sürebilir, lütfen bekleyin...
+call npm install
+
+echo.
+echo [2/2] Uygulama çalıştırılıyor...
 call npm run dev
+
 if %errorlevel% neq 0 (
     echo.
-    echo Bir hata olustu! Lutfen yukaridaki hatayi kontrol edin.
+    echo [HATA] Bir sorun oluştu! 
+    echo Uygulama başlatılamadı. Lütfen yukarıdaki hata mesajlarını inceleyin.
+    echo.
     pause
 )
 pause
