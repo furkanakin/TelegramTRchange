@@ -200,19 +200,42 @@ function findSubImage(base, sub) {
   const baseData = base.bitmap.data;
   const subData = sub.bitmap.data;
 
-  for (let y = 0; y <= baseH - subH; y += 8) {
-    for (let x = 0; x <= baseW - subW; x += 8) {
+  if (subW > baseW || subH > baseH) return null;
+
+  // Daha hassas tarama (Step: 5)
+  for (let y = 0; y <= baseH - subH; y += 5) {
+    for (let x = 0; x <= baseW - subW; x += 5) {
       if (matchAt(x, y)) return { x, y };
     }
   }
 
   function matchAt(tx, ty) {
-    // Corner + center samples
-    const samples = [[0, 0], [subW - 1, 0], [0, subH - 1], [subW - 1, subH - 1], [Math.floor(subW / 2), Math.floor(subH / 2)]];
-    for (const [sx, sy] of samples) {
+    // 4x4 Izgara örnekleme (Daha güvenilir)
+    const points = [];
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        points.push([
+          Math.floor((subW - 1) * i / 3),
+          Math.floor((subH - 1) * j / 3)
+        ]);
+      }
+    }
+
+    let diffCount = 0;
+    const maxDiffAllowed = 2; // 16 noktadan 2 tanesi farklı olsa bile kabul et (Gürültü toleransı)
+
+    for (const [sx, sy] of points) {
       const bi = ((ty + sy) * baseW + (tx + sx)) * 4;
       const si = (sy * subW + sx) * 4;
-      if (Math.abs(baseData[bi] - subData[si]) > 40 || Math.abs(baseData[bi + 1] - subData[si + 1]) > 40 || Math.abs(baseData[bi + 2] - subData[si + 2]) > 40) return false;
+
+      const dr = Math.abs(baseData[bi] - subData[si]);
+      const dg = Math.abs(baseData[bi + 1] - subData[si + 1]);
+      const db = Math.abs(baseData[bi + 2] - subData[si + 2]);
+
+      if (dr > 50 || dg > 50 || db > 50) {
+        diffCount++;
+        if (diffCount > maxDiffAllowed) return false;
+      }
     }
     return true;
   }
