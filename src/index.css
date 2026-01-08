@@ -33,7 +33,8 @@ body {
 
 .app-container {
   width: 900px;
-  height: 600px;
+  min-height: 500px;
+  max-height: 90vh;
   background: rgba(25, 25, 35, 0.7);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -74,8 +75,13 @@ body {
   cursor: pointer;
 }
 
-.close { background: #ff5f56; }
-.minimize { background: #ffbd2e; }
+.close {
+  background: #ff5f56;
+}
+
+.minimize {
+  background: #ffbd2e;
+}
 
 .main-content {
   flex: 1;
@@ -89,7 +95,9 @@ body {
 .settings-panel {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 15px;
+  overflow-y: auto;
+  padding-right: 5px;
 }
 
 .card {
@@ -134,9 +142,10 @@ body {
 
 .btn.start {
   background: #10b981;
-  height: 50px;
+  min-height: 50px;
   font-size: 18px;
-  margin-top: auto;
+  margin-top: 10px;
+  flex-shrink: 0;
 }
 
 .btn.start:disabled {
@@ -195,8 +204,15 @@ body {
   padding-left: 8px;
 }
 
-.log-entry.error { border-left-color: #ef4444; color: #fca5a5; }
-.log-entry.success { border-left-color: #10b981; color: #a7f3d0; }
+.log-entry.error {
+  border-left-color: #ef4444;
+  color: #fca5a5;
+}
+
+.log-entry.success {
+  border-left-color: #10b981;
+  color: #a7f3d0;
+}
 
 ::-webkit-scrollbar {
   width: 6px;

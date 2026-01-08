@@ -76,9 +76,11 @@ function App() {
 
           <div className="card">
             <h3>Referans Görsel</h3>
-            <button className="btn secondary" onClick={handleSelectImage}>Görsel Yükle</button>
-            <div className="image-preview">
-              {refImage ? <img src={`file://${refImage}`} alt="preview" /> : <span>Görsel Yok</span>}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button className="btn secondary" onClick={handleSelectImage} style={{ flex: 1 }}>Görsel Yükle</button>
+              <div className="image-preview" style={{ width: '80px', height: '40px', margin: 0 }}>
+                {refImage ? <img src={`file://${refImage}`} alt="p" /> : <span style={{ fontSize: '10px' }}>Yok</span>}
+              </div>
             </div>
             <div className="path-display">{refImage || 'Seçilmedi'}</div>
           </div>
