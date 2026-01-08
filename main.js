@@ -47,11 +47,11 @@ const powershell = {
     const script = `
       Add-Type -AssemblyName System.Windows.Forms
       Add-Type -AssemblyName System.Drawing
-      $Screen = [System.Windows.Forms.Screen]::PrimaryScreen
-      $Width  = $Screen.Bounds.Width
-      $Height = $Screen.Bounds.Height
-      $Left   = $Screen.Bounds.Left
-      $Top    = $Screen.Bounds.Top
+      $V = [System.Windows.Forms.SystemInformation]::VirtualScreen
+      $Width  = $V.Width
+      $Height = $V.Height
+      $Left   = $V.Left
+      $Top    = $V.Top
       $Bitmap = New-Object System.Drawing.Bitmap $Width, $Height
       $Graphic = [System.Drawing.Graphics]::FromImage($Bitmap)
       $Graphic.CopyFromScreen($Left, $Top, 0, 0, $Bitmap.Size)
@@ -202,9 +202,9 @@ function findSubImage(base, sub) {
 
   if (subW > baseW || subH > baseH) return null;
 
-  // Daha hassas tarama (Step: 5)
-  for (let y = 0; y <= baseH - subH; y += 5) {
-    for (let x = 0; x <= baseW - subW; x += 5) {
+  // Çok daha hassas tarama (Step: 2)
+  for (let y = 0; y <= baseH - subH; y += 2) {
+    for (let x = 0; x <= baseW - subW; x += 2) {
       if (matchAt(x, y)) return { x, y };
     }
   }
