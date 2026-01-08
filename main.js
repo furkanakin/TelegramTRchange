@@ -6,7 +6,7 @@ import { spawn, execSync, exec } from 'child_process';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
-const Jimp = require('jimp');
+const { Jimp } = require('jimp');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -200,8 +200,8 @@ function findSubImage(base, sub) {
   const baseData = base.bitmap.data;
   const subData = sub.bitmap.data;
 
-  for (let y = 0; y <= baseH - subH; y += 15) {
-    for (let x = 0; x <= baseW - subW; x += 15) {
+  for (let y = 0; y <= baseH - subH; y += 8) {
+    for (let x = 0; x <= baseW - subW; x += 8) {
       if (matchAt(x, y)) return { x, y };
     }
   }
