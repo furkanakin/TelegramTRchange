@@ -72,23 +72,30 @@ ipcMain.handle('select-folder', async () => {
 });
 
 ipcMain.handle('get-coordinates', async () => {
-  // Görünür pencereyi küçült ki kullanıcı arkadaki butona tıklayabilsin
   mainWindow.minimize();
 
+  // Kesin koordinat yakalamak için geliştirilmiş script
   const script = `
     Add-Type -AssemblyName System.Windows.Forms
     while (!([System.Windows.Forms.Control]::MouseButtons -band [System.Windows.Forms.MouseButtons]::Left)) { 
       Start-Sleep -m 50 
     }
-    $pos = [System.Windows.Forms.Control]::MousePosition
-    Write-Output "$($pos.X),$($pos.Y)"
+    $p = [System.Windows.Forms.Cursor]::Position
+    Write-Host "$($p.X),$($p.Y)"
   `;
 
   try {
     const output = execSync(`powershell -Command "${script}"`).toString().trim();
-    mainWindow.restore(); // Geri getir
-    const [x, y] = output.split(',').map(Number);
-    return { x, y };
+    mainWindow.restore();
+
+    // Çıktıdan sadece X,Y kısmını al (bazen gereksiz boşluk gelebilir)
+    const matches = output.match(/(\d+),(\d+)/);
+    if (matches) {
+      const x = parseInt(matches[1]);
+      const y = parseInt(matches[2]);
+      return { x, y };
+    }
+    return null;
   } catch (e) {
     mainWindow.restore();
     console.error('Coord capture error:', e);
